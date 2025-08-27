@@ -1,0 +1,126 @@
+@{
+    ViewData["Title"] = "Upload Script File";
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <h2>Upload Script File</h2>
+
+        @if (!string.IsNullOrEmpty(ViewBag.SuccessMessage))
+        {
+            <div class="alert alert-success" role="alert">
+                @ViewBag.SuccessMessage
+                @if (ViewBag.UploadResult != null)
+                {
+                    var result = ViewBag.UploadResult as ScriptProcessor.Services.UploadResult;
+                    <br />
+                    <small>
+                        Blob Name: @result?.BlobName<br />
+                        Size: @result?.Size bytes<br />
+                        ETag: @result?.ETag
+                    </small>
+                }
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger" role="alert">
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <div>@error.ErrorMessage</div>
+                }
+            </div>
+        }
+
+        <form asp-action="Upload" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+            <div class="mb-3">
+                <label for="file" class="form-label">Select .txt file to upload</label>
+                <input type="file" class="form-control" id="file" name="file" accept=".txt" required>
+                <div class="invalid-feedback">
+                    Please select a valid .txt file.
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="scriptName" class="form-label">Script Name</label>
+                <input type="text" class="form-control" id="scriptName" name="scriptName" placeholder="Enter script name" required>
+                <div class="invalid-feedback">
+                    Please provide a script name.
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="author" class="form-label">Author</label>
+                <input type="text" class="form-control" id="author" name="author" placeholder="Enter author name" required>
+                <div class="invalid-feedback">
+                    Please provide the author name.
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="languageId" class="form-label">Language ID</label>
+                <select class="form-select" id="languageId" name="languageId">
+                    <option value="1" selected>English (1)</option>
+                    <option value="2">Spanish (2)</option>
+                    <option value="3">French (3)</option>
+                    <option value="4">German (4)</option>
+                    <option value="5">Other (5)</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-cloud-upload"></i> Upload File
+            </button>
+            <a asp-controller="Home" asp-action="Index" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Upload Instructions</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check-circle text-success"></i> Only .txt files are supported</li>
+                    <li><i class="bi bi-check-circle text-success"></i> File will be stored in Azure Blob Storage</li>
+                    <li><i class="bi bi-check-circle text-success"></i> A unique Script ID will be generated</li>
+                    <li><i class="bi bi-check-circle text-success"></i> All fields are required</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Bootstrap form validation
+        (function() {
+            'use strict';
+            window.addEventListener('load', function() {
+                var forms = document.getElementsByClassName('needs-validation');
+                var validation = Array.prototype.filter.call(forms, function(form) {
+                    form.addEventListener('submit', function(event) {
+                        var fileInput = document.getElementById('file');
+                        var file = fileInput.files[0];
+                        
+                        if (file && !file.name.toLowerCase().endsWith('.txt')) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            fileInput.setCustomValidity('Please select a .txt file');
+                        } else {
+                            fileInput.setCustomValidity('');
+                        }
+                        
+                        if (form.checkValidity() === false) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
+                        form.classList.add('was-validated');
+                    }, false);
+                });
+            }, false);
+        })();
+    </script>
+}

@@ -1,0 +1,110 @@
+@model IEnumerable<ScriptProcessor.Services.BlobFileInfo>
+@{
+    ViewData["Title"] = "Script Files";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Script Files</h2>
+    <a asp-action="Index" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Upload New File
+    </a>
+</div>
+
+@if (!string.IsNullOrEmpty(TempData["ErrorMessage"]?.ToString()))
+{
+    <div class="alert alert-danger" role="alert">
+        @TempData["ErrorMessage"]
+    </div>
+}
+
+<div class="row">
+    <div class="col-12">
+        @if (Model.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>File Name</th>
+                            <th>Script ID</th>
+                            <th>Language</th>
+                            <th>Size</th>
+                            <th>Last Modified</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var file in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <i class="bi bi-file-text text-primary me-2"></i>
+                                    <strong>@file.FileName</strong>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(file.ScriptId))
+                                    {
+                                        <span class="badge bg-info">@file.ScriptId</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">N/A</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(file.LanguageId))
+                                    {
+                                        <span class="badge bg-secondary">@file.LanguageId</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">N/A</span>
+                                    }
+                                </td>
+                                <td>@FormatFileSize(file.Size)</td>
+                                <td>@file.LastModified.ToString("MMM dd, yyyy HH:mm")</td>
+                                <td>
+                                    <a asp-action="View" asp-route-blobName="@file.BlobName" 
+                                       class="btn btn-sm btn-outline-primary" 
+                                       title="View file details and content">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-files display-1 text-muted"></i>
+                <h4 class="text-muted mt-3">No files found</h4>
+                <p class="text-muted">Upload your first script file to get started.</p>
+                <a asp-action="Index" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Upload File
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 B";
+        
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int suffixIndex = 0;
+        double size = bytes;
+        
+        while (size >= 1024 && suffixIndex < suffixes.Length - 1)
+        {
+            size /= 1024;
+            suffixIndex++;
+        }
+        
+        return $"{size:F1} {suffixes[suffixIndex]}";
+    }
+}
