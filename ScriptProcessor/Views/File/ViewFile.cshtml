@@ -116,17 +116,62 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleWordWrap()">
                         <i class="bi bi-text-wrap"></i> Toggle Wrap
                     </button>
+
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleWordWrap()">
+                        <i class="bi bi-text-wrap"></i> Toggle Wrap
+                    </button>
+                    
                 </div>
             </div>
+
+            <!-- Language Tabs -->
             <div class="card-body p-0">
-                <div class="position-relative" style="height: 600px;">
-                    <pre id="fileContent" class="h-100 m-0 p-3 overflow-auto" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@Model.TextContent</code></pre>
+                <ul class="nav nav-tabs" id="languageTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="original-tab" data-bs-toggle="tab" data-bs-target="#original" type="button" role="tab" aria-controls="original" aria-selected="true">
+                            <i class="bi bi-file-text me-1"></i>Original
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="german-tab" data-bs-toggle="tab" data-bs-target="#german" type="button" role="tab" aria-controls="german" aria-selected="false">
+                            <i class="bi bi-translate me-1"></i>German
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="french-tab" data-bs-toggle="tab" data-bs-target="#french" type="button" role="tab" aria-controls="french" aria-selected="false">
+                            <i class="bi bi-translate me-1"></i>French
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="languageTabContent">
+                    <!-- Original Content -->
+                    <div class="tab-pane fade show active" id="original" role="tabpanel" aria-labelledby="original-tab">
+                        <div class="position-relative" style="height: 600px;">
+                            <pre id="fileContent" class="h-100 m-0 p-3 overflow-auto content-area" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@Model.TextContent</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- German Translation -->
+                    <div class="tab-pane fade" id="german" role="tabpanel" aria-labelledby="german-tab">
+                        <div class="position-relative" style="height: 600px;">
+                            <pre id="germanContent" class="h-100 m-0 p-3 overflow-auto content-area" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@(Model.GermanTranslation ?? "No German translation available")</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- French Translation -->
+                    <div class="tab-pane fade" id="french" role="tabpanel" aria-labelledby="french-tab">
+                        <div class="position-relative" style="height: 600px;">
+                            <pre id="frenchContent" class="h-100 m-0 p-3 overflow-auto content-area" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@(Model.FrenchTranslation ?? "No French translation available")</code></pre>
+                        </div>
+                    </div>
                 </div>
             </div>
+
             <div class="card-footer text-muted">
                 <small>
                     <i class="bi bi-info-circle me-1"></i>
-                    @Model.TextContent.Split('\n').Length lines, @Model.TextContent.Length characters
+                    <span id="contentStats">@Model.TextContent.Split('\n').Length lines, @Model.TextContent.Length characters</span>
                 </small>
             </div>
         </div>
@@ -136,7 +181,10 @@
 @section Scripts {
     <script>
         function copyToClipboard() {
-            const content = document.getElementById('fileContent').textContent;
+            // Get the active tab's content
+            const activeTab = document.querySelector('.tab-pane.active pre');
+            const content = activeTab.textContent;
+
             navigator.clipboard.writeText(content).then(function() {
                 // Show success feedback
                 const btn = event.target.closest('button');
@@ -144,7 +192,7 @@
                 btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
                 btn.classList.remove('btn-outline-secondary');
                 btn.classList.add('btn-success');
-                
+
                 setTimeout(function() {
                     btn.innerHTML = originalHTML;
                     btn.classList.remove('btn-success');
@@ -157,31 +205,60 @@
         }
 
         function toggleWordWrap() {
-            const content = document.getElementById('fileContent');
+            // Apply word wrap to all content areas
+            const contentAreas = document.querySelectorAll('.content-area');
             const btn = event.target.closest('button');
-            
-            if (content.style.whiteSpace === 'pre') {
-                content.style.whiteSpace = 'pre-wrap';
-                btn.innerHTML = '<i class="bi bi-text-wrap"></i> Toggle Wrap';
-            } else {
-                content.style.whiteSpace = 'pre';
+
+            contentAreas.forEach(function(content) {
+                if (content.style.whiteSpace === 'pre') {
+                    content.style.whiteSpace = 'pre-wrap';
+                } else {
+                    content.style.whiteSpace = 'pre';
+                }
+            });
+
+            // Update button text
+            if (contentAreas[0].style.whiteSpace === 'pre') {
                 btn.innerHTML = '<i class="bi bi-text-left"></i> Toggle Wrap';
+            } else {
+                btn.innerHTML = '<i class="bi bi-text-wrap"></i> Toggle Wrap';
             }
         }
 
-        // Syntax highlighting for common file types (basic)
+        function updateContentStats() {
+            const activeTab = document.querySelector('.tab-pane.active pre code');
+            const content = activeTab.textContent;
+            const lines = content.split('\n').length;
+            const chars = content.length;
+            document.getElementById('contentStats').textContent = `${lines} lines, ${chars} characters`;
+        }
+
+        // Handle tab switching and update stats
         document.addEventListener('DOMContentLoaded', function() {
-            const content = document.getElementById('fileContent');
             const fileName = '@Model.FileName';
-            
-            // Add basic syntax highlighting classes based on file extension
-            if (fileName.endsWith('.json')) {
-                content.classList.add('language-json');
-            } else if (fileName.endsWith('.xml')) {
-                content.classList.add('language-xml');
-            } else if (fileName.endsWith('.csv')) {
-                content.classList.add('language-csv');
-            }
+
+            // Add basic syntax highlighting classes to all content areas
+            const contentAreas = document.querySelectorAll('.content-area');
+            contentAreas.forEach(function(content) {
+                if (fileName.endsWith('.json')) {
+                    content.classList.add('language-json');
+                } else if (fileName.endsWith('.xml')) {
+                    content.classList.add('language-xml');
+                } else if (fileName.endsWith('.csv')) {
+                    content.classList.add('language-csv');
+                }
+            });
+
+            // Handle tab switching
+            const tabButtons = document.querySelectorAll('#languageTabs button[data-bs-toggle="tab"]');
+            tabButtons.forEach(function(button) {
+                button.addEventListener('shown.bs.tab', function() {
+                    updateContentStats();
+                });
+            });
+
+            // Initial stats update
+            updateContentStats();
         });
     </script>
 }

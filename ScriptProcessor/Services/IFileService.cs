@@ -43,6 +43,8 @@
         DateTimeOffset LastModified,
         string ContentType,
         Dictionary<string, string> Metadata,
-        string TextContent);
+        string TextContent,
+        string? GermanTranslation = null,
+        string? FrenchTranslation = null);
 
 }

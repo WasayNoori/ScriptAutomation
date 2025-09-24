@@ -6,7 +6,7 @@ using ScriptProcessor.Data;
 using ScriptProcessor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-
+builder.Services.AddRazorPages();
 // Add Azure Key Vault configuration for all environments
 var keyVaultUrl = builder.Configuration["Azure:KeyVault:Url"];
 if (!string.IsNullOrEmpty(keyVaultUrl))
@@ -62,7 +62,9 @@ app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    pattern: "{controller=File}/{action=List}/{id?}");
 app.MapRazorPages();
+
+
 
 app.Run();

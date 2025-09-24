@@ -64,7 +64,7 @@
                                 <td>@FormatFileSize(file.Size)</td>
                                 <td>@file.LastModified.ToString("MMM dd, yyyy HH:mm")</td>
                                 <td>
-                                    <a asp-action="View" asp-route-blobName="@file.BlobName" 
+                                    <a asp-action="ViewFile" asp-route-blobName="@file.BlobName" 
                                        class="btn btn-sm btn-outline-primary" 
                                        title="View file details and content">
                                         <i class="bi bi-eye"></i> View

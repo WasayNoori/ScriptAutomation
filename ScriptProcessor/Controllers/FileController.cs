@@ -34,7 +34,7 @@ namespace ScriptProcessor.Controllers
             }
         }
 
-        public async Task<IActionResult> View(string blobName)
+        public async Task<IActionResult> ViewFile(string blobName)
         {
             if (string.IsNullOrEmpty(blobName))
             {
@@ -61,28 +61,29 @@ namespace ScriptProcessor.Controllers
         [HttpPost]
         public async Task<IActionResult> Upload(IFormFile file, string scriptName, string author, int languageId = 1)
         {
+            // Validation checks - these can return immediately
             if (file == null || file.Length == 0)
             {
                 ModelState.AddModelError("file", "Please select a file to upload.");
-                return (IActionResult)View("Index");
+                return View("Index");
             }
 
             if (!file.FileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
             {
                 ModelState.AddModelError("file", "Only .txt files are allowed.");
-                return (IActionResult)View("Index");
+                return View("Index");
             }
 
             if (string.IsNullOrWhiteSpace(scriptName))
             {
                 ModelState.AddModelError("scriptName", "Script name is required.");
-                return (IActionResult)View("Index");
+                return View("Index");
             }
 
             if (string.IsNullOrWhiteSpace(author))
             {
                 ModelState.AddModelError("author", "Author is required.");
-                return (IActionResult)View("Index");
+                return View("Index");
             }
 
             try
@@ -103,13 +104,13 @@ namespace ScriptProcessor.Controllers
                 ViewBag.SuccessMessage = $"File '{file.FileName}' uploaded successfully. Script ID: {scriptId}";
                 ViewBag.UploadResult = result;
 
-                return (IActionResult)View("Index");
+                return View("Index");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error uploading file {FileName}", file.FileName);
                 ModelState.AddModelError("", $"Upload failed: {ex.Message}");
-                return (IActionResult)View("Index");
+                return View("Index");
             }
         }
     }
