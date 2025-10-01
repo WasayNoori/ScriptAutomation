@@ -139,7 +139,11 @@ namespace ScriptProcessor.Controllers
 
             try
             {
-                var glossary = new Dictionary<string, string>();
+                // Get the file content to search for glossary terms
+                var fileDetails = await _fileService.GetFileDetailsAsync(selectedFile);
+
+                // Get glossary terms found in the script content using the target language
+                var foundGlossaryTerms = await _glossaryService.SelectedWords(fileDetails.TextContent, targetLanguage.ToLower());
 
                 // Get the full blob URL instead of just the blob name
                 var fullBlobUrl = await _fileService.GetBlobUrlAsync(selectedFile);
@@ -147,10 +151,11 @@ namespace ScriptProcessor.Controllers
                 var request = new TranslateRequest
                 {
                     BlobPath = fullBlobUrl,
-                    Glossary = glossary
+                    Glossary = foundGlossaryTerms
                 };
 
-                _logger.LogInformation("Processing file {FileName} for translation to {Language}", selectedFile, targetLanguage);
+                _logger.LogInformation("Processing file {FileName} for translation to {Language} with {GlossaryCount} glossary terms",
+                    selectedFile, targetLanguage, foundGlossaryTerms.Count);
 
                 var response = await _apiService.TranslateAsync(request);
 
