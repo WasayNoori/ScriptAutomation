@@ -15,6 +15,20 @@
     </div>
 </div>
 
+@if (!string.IsNullOrEmpty(TempData["ErrorMessage"]?.ToString()))
+{
+    <div class="alert alert-danger" role="alert">
+        @TempData["ErrorMessage"]
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(TempData["SuccessMessage"]?.ToString()))
+{
+    <div class="alert alert-success" role="alert">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
 <div class="row">
     <!-- File Metadata Panel -->
     <div class="col-md-4">
@@ -41,6 +55,10 @@
                     <tr>
                         <td><strong>Last Modified:</strong></td>
                         <td>@Model.LastModified.ToString("MMM dd, yyyy HH:mm:ss")</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Word Count:</strong></td>
+                        <td><span id="wordCount">@CountWords(Model.TextContent)</span></td>
                     </tr>
                 </table>
             </div>
@@ -95,9 +113,22 @@
                     <i class="bi bi-gear me-2"></i>Additional Actions
                 </h5>
             </div>
-            <div class="card-body text-muted">
-                <!-- Placeholder for future functionality -->
-                <p class="small">Additional processing options will be available here in the future.</p>
+
+            <div class="card-body">
+                <form asp-action="ProcessFile" method="post">
+                    <input type="hidden" name="selectedFile" value="@Model.BlobName" />
+                    <div class="form-group mb-3">
+                        <label for="targetLanguage" class="form-label">Target Language:</label>
+                        <select id="targetLanguage" name="targetLanguage" class="form-select" required>
+                            <option value="">Select language...</option>
+                            <option value="French">French</option>
+                            <option value="German">German</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-gear-fill"></i> Process Translation
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -117,8 +148,8 @@
                         <i class="bi bi-text-wrap"></i> Toggle Wrap
                     </button>
 
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleWordWrap()">
-                        <i class="bi bi-text-wrap"></i> Toggle Wrap
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="getGlossary()">
+                        <i class="bi bi-book"></i> Get Glossary
                     </button>
                     
                 </div>
@@ -133,13 +164,13 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="german-tab" data-bs-toggle="tab" data-bs-target="#german" type="button" role="tab" aria-controls="german" aria-selected="false">
-                            <i class="bi bi-translate me-1"></i>German
+                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab" aria-controls="summary" aria-selected="false">
+                            <i class="bi bi-file-text me-1"></i>Summary
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="french-tab" data-bs-toggle="tab" data-bs-target="#french" type="button" role="tab" aria-controls="french" aria-selected="false">
-                            <i class="bi bi-translate me-1"></i>French
+                        <button class="nav-link" id="translation-tab" data-bs-toggle="tab" data-bs-target="#translation" type="button" role="tab" aria-controls="translation" aria-selected="false">
+                            <i class="bi bi-translate me-1"></i>Translation
                         </button>
                     </li>
                 </ul>
@@ -152,17 +183,17 @@
                         </div>
                     </div>
 
-                    <!-- German Translation -->
-                    <div class="tab-pane fade" id="german" role="tabpanel" aria-labelledby="german-tab">
+                    <!-- Summary -->
+                    <div class="tab-pane fade" id="summary" role="tabpanel" aria-labelledby="summary-tab">
                         <div class="position-relative" style="height: 600px;">
-                            <pre id="germanContent" class="h-100 m-0 p-3 overflow-auto content-area" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@(Model.GermanTranslation ?? "No German translation available")</code></pre>
+                            <pre id="summaryContent" class="h-100 m-0 p-3 overflow-auto content-area" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@(Model.SummaryContent ?? "No summary available")</code></pre>
                         </div>
                     </div>
 
-                    <!-- French Translation -->
-                    <div class="tab-pane fade" id="french" role="tabpanel" aria-labelledby="french-tab">
+                    <!-- Translation -->
+                    <div class="tab-pane fade" id="translation" role="tabpanel" aria-labelledby="translation-tab">
                         <div class="position-relative" style="height: 600px;">
-                            <pre id="frenchContent" class="h-100 m-0 p-3 overflow-auto content-area" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@(Model.FrenchTranslation ?? "No French translation available")</code></pre>
+                            <pre id="translationContent" class="h-100 m-0 p-3 overflow-auto content-area" style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.4; background-color: #f8f9fa;"><code>@(Model.TranslatedContent ?? "No translation available")</code></pre>
                         </div>
                     </div>
                 </div>
@@ -225,12 +256,135 @@
             }
         }
 
+        function getGlossary() {
+            // Get the content from the Original tab (English content)
+            const originalTabContent = document.querySelector('#original pre code');
+            const scriptText = originalTabContent.textContent;
+
+            // Get the selected target language from the form
+            const targetLanguageSelect = document.getElementById('targetLanguage');
+            const targetLanguage = targetLanguageSelect.value || 'french';
+
+            if (!scriptText || scriptText.trim() === '') {
+                alert('No text content found to analyze.');
+                return;
+            }
+
+            // Update button to show loading state
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+            btn.disabled = true;
+
+            // Send the request to the controller
+            fetch('@Url.Action("GetGlossary", "File")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                },
+                body: JSON.stringify({
+                    scriptText: scriptText,
+                    targetLanguage: targetLanguage.toLowerCase()
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayGlossaryResults(data.terms);
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to retrieve glossary terms'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while processing the glossary request.');
+            })
+            .finally(() => {
+                // Restore button state
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            });
+        }
+
+        function displayGlossaryResults(terms) {
+            if (!terms || terms.length === 0) {
+                alert('No glossary terms found in the text.');
+                return;
+            }
+
+            // Create a modal or display area for the results
+            let resultsHtml = `
+                <div class="modal fade" id="glossaryModal" tabindex="-1" aria-labelledby="glossaryModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="glossaryModalLabel">
+                                    <i class="bi bi-book me-2"></i>Found Glossary Terms (${terms.length})
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>English Term</th>
+                                                <th>Translation</th>
+                                                <th>Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+
+            terms.forEach(term => {
+                resultsHtml += `
+                    <tr>
+                        <td><strong>${term.englishTerm}</strong></td>
+                        <td>${term.translation}</td>
+                        <td><span class="badge bg-primary">${term.count}</span></td>
+                    </tr>`;
+            });
+
+            resultsHtml += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Remove existing modal if any
+            const existingModal = document.getElementById('glossaryModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Add the new modal to the body
+            document.body.insertAdjacentHTML('beforeend', resultsHtml);
+
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('glossaryModal'));
+            modal.show();
+        }
+
+        function countWords(text) {
+            if (!text || text.trim() === '') return 0;
+            return text.trim().split(/\s+/).length;
+        }
+
         function updateContentStats() {
             const activeTab = document.querySelector('.tab-pane.active pre code');
             const content = activeTab.textContent;
             const lines = content.split('\n').length;
             const chars = content.length;
+            const words = countWords(content);
+
             document.getElementById('contentStats').textContent = `${lines} lines, ${chars} characters`;
+            document.getElementById('wordCount').textContent = words;
         }
 
         // Handle tab switching and update stats
@@ -267,17 +421,23 @@
     private string FormatFileSize(long bytes)
     {
         if (bytes == 0) return "0 B";
-        
+
         string[] suffixes = { "B", "KB", "MB", "GB" };
         int suffixIndex = 0;
         double size = bytes;
-        
+
         while (size >= 1024 && suffixIndex < suffixes.Length - 1)
         {
             size /= 1024;
             suffixIndex++;
         }
-        
+
         return $"{size:F1} {suffixes[suffixIndex]}";
+    }
+
+    private int CountWords(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return 0;
+        return text.Trim().Split(new char[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
     }
 }

@@ -170,7 +170,24 @@ namespace ScriptProcessor.Services
                 properties.Value.LastModified,
                 properties.Value.ContentType ?? "text/plain",
                 properties.Value.Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                textContent);
+                textContent,
+                null, // SummaryContent - will be populated later
+                null  // TranslatedContent - will be populated from API response
+            );
+        }
+
+        public async Task<string> GetBlobUrlAsync(string blobName, CancellationToken ct = default)
+        {
+            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+            var blobClient = containerClient.GetBlobClient(blobName);
+
+            if (!await blobClient.ExistsAsync(ct))
+            {
+                throw new FileNotFoundException($"Blob '{blobName}' not found in container '{_containerName}'");
+            }
+
+            // Return the full URL to the blob
+            return blobClient.Uri.ToString();
         }
     }
 }

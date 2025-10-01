@@ -6,11 +6,15 @@ namespace ScriptProcessor.Controllers
     public class FileController : Controller
     {
         private readonly IFileService _fileService;
+        private readonly IApiService _apiService;
+        private readonly GlossaryDBService _glossaryService;
         private readonly ILogger<FileController> _logger;
 
-        public FileController(IFileService fileService, ILogger<FileController> logger)
+        public FileController(IFileService fileService, IApiService apiService, GlossaryDBService glossaryService, ILogger<FileController> logger)
         {
             _fileService = fileService;
+            _apiService = apiService;
+            _glossaryService = glossaryService;
             _logger = logger;
         }
 
@@ -44,6 +48,16 @@ namespace ScriptProcessor.Controllers
             try
             {
                 var fileDetails = await _fileService.GetFileDetailsAsync(blobName);
+
+                // Check if there's translated content from a recent translation
+                var translatedContent = TempData["TranslatedContent"]?.ToString();
+
+                // Create a new instance with the translated content if available
+                if (!string.IsNullOrEmpty(translatedContent))
+                {
+                    fileDetails = fileDetails with { TranslatedContent = translatedContent };
+                }
+
                 return View(fileDetails);
             }
             catch (FileNotFoundException)
@@ -113,5 +127,93 @@ namespace ScriptProcessor.Controllers
                 return View("Index");
             }
         }
+
+        [HttpPost]
+        public async Task<IActionResult> ProcessFile(string selectedFile, string targetLanguage, string returnUrl = null)
+        {
+            if (string.IsNullOrEmpty(selectedFile) || string.IsNullOrEmpty(targetLanguage))
+            {
+                TempData["ErrorMessage"] = "Please select both a file and target language.";
+                return RedirectToAction("List");
+            }
+
+            try
+            {
+                var glossary = new Dictionary<string, string>();
+
+                // Get the full blob URL instead of just the blob name
+                var fullBlobUrl = await _fileService.GetBlobUrlAsync(selectedFile);
+
+                var request = new TranslateRequest
+                {
+                    BlobPath = fullBlobUrl,
+                    Glossary = glossary
+                };
+
+                _logger.LogInformation("Processing file {FileName} for translation to {Language}", selectedFile, targetLanguage);
+
+                var response = await _apiService.TranslateAsync(request);
+
+                if (response.Success)
+                {
+                    // Store the translated content in TempData to display in the Translation tab
+                    TempData["TranslatedContent"] = response.TranslatedContent;
+                    TempData["SuccessMessage"] = $"File successfully processed for {targetLanguage} translation.";
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = $"Processing failed: {response.Message}";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing file {FileName} for {Language} translation", selectedFile, targetLanguage);
+                TempData["ErrorMessage"] = $"Error processing file: {ex.Message}";
+            }
+
+            // If called from ViewFile, redirect back to ViewFile, otherwise go to List
+            if (Request.Headers.Referer.ToString().Contains("ViewFile"))
+            {
+                return RedirectToAction("ViewFile", new { blobName = selectedFile });
+            }
+
+            return RedirectToAction("List");
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetGlossary([FromBody] GlossaryRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.ScriptText))
+            {
+                return BadRequest(new { success = false, message = "Script text is required." });
+            }
+
+            try
+            {
+                var foundTerms = await _glossaryService.SelectedWordsWithCounts(request.ScriptText, request.TargetLanguage ?? "french");
+
+                _logger.LogInformation("Found {TermCount} glossary terms in script text", foundTerms.Count);
+
+                return Json(new {
+                    success = true,
+                    terms = foundTerms.Select(kvp => new {
+                        englishTerm = kvp.Key,
+                        translation = kvp.Value.translation,
+                        count = kvp.Value.count
+                    })
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving glossary terms");
+                return Json(new { success = false, message = $"Error retrieving glossary terms: {ex.Message}" });
+            }
+        }
+    }
+
+    public class GlossaryRequest
+    {
+        public string ScriptText { get; set; } = string.Empty;
+        public string TargetLanguage { get; set; } = "french";
     }
 }

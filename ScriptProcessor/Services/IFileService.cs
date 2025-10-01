@@ -24,6 +24,7 @@
         Task DeleteAsync(string blobName, CancellationToken ct = default);
         Task<IEnumerable<BlobFileInfo>> ListFilesAsync(CancellationToken ct = default);
         Task<BlobFileDetails> GetFileDetailsAsync(string blobName, CancellationToken ct = default);
+        Task<string> GetBlobUrlAsync(string blobName, CancellationToken ct = default);
     }
 
     public record UploadResult(string BlobName, string? VersionId, string ETag, long Size);
@@ -44,7 +45,7 @@
         string ContentType,
         Dictionary<string, string> Metadata,
         string TextContent,
-        string? GermanTranslation = null,
-        string? FrenchTranslation = null);
+        string? SummaryContent = null,
+        string? TranslatedContent = null);
 
 }

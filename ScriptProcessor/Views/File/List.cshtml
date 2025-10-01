@@ -10,10 +10,48 @@
     </a>
 </div>
 
+@if (Model.Any())
+{
+    <div class="mb-4 p-3 bg-light rounded">
+        <form asp-action="ProcessFile" method="post" class="d-flex align-items-end gap-3">
+            <div class="form-group">
+                <label for="selectedFile" class="form-label">Select File:</label>
+                <select id="selectedFile" name="selectedFile" class="form-select" required>
+                    <option value="">Choose a file...</option>
+                    @foreach (var file in Model)
+                    {
+                        <option value="@file.BlobName">@file.FileName</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="targetLanguage" class="form-label">Target Language:</label>
+                <select id="targetLanguage" name="targetLanguage" class="form-select" required>
+                    <option value="">Select language...</option>
+                    <option value="French">French</option>
+                    <option value="German">German</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-gear-fill"></i> Process
+                </button>
+            </div>
+        </form>
+    </div>
+}
+
 @if (!string.IsNullOrEmpty(TempData["ErrorMessage"]?.ToString()))
 {
     <div class="alert alert-danger" role="alert">
         @TempData["ErrorMessage"]
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(TempData["SuccessMessage"]?.ToString()))
+{
+    <div class="alert alert-success" role="alert">
+        @TempData["SuccessMessage"]
     </div>
 }
 

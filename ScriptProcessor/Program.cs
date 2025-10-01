@@ -25,6 +25,15 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
     .AddEntityFrameworkStores<ApplicationDbContext>();
 
+//register the SQLite glossary service
+builder.Services.AddDbContext<GlossaryDbContext>(options =>
+    options.UseSqlite("Data Source=\"C:\\Translations\\Glossaries\\glossary.db\""));
+
+// Register GlossaryDBService
+builder.Services.AddScoped<GlossaryDBService>();
+
+
+
 // Register Azure Blob Storage
 builder.Services.AddSingleton(provider =>
 {
@@ -36,6 +45,12 @@ builder.Services.AddSingleton(provider =>
 
 // Register Azure Blob Service
 builder.Services.AddScoped<IFileService, AzureBlobService>();
+
+// Register Azure Vault Service
+builder.Services.AddScoped<AzureVaultService>();
+
+// Register API Service with HttpClient
+builder.Services.AddHttpClient<IApiService, ApiService>();
 
 builder.Services.AddControllersWithViews();
 
