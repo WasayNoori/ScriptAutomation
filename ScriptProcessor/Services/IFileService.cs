@@ -25,6 +25,8 @@
         Task<IEnumerable<BlobFileInfo>> ListFilesAsync(CancellationToken ct = default);
         Task<BlobFileDetails> GetFileDetailsAsync(string blobName, CancellationToken ct = default);
         Task<string> GetBlobUrlAsync(string blobName, CancellationToken ct = default);
+        Task<UploadResult> SaveBlobAsync(string blobName, string textContent, CancellationToken ct = default);
+        Task<UploadResult> CreateRelatedFileAsync(string originalBlobName, string newSuffix, string textContent, CancellationToken ct = default);
     }
 
     public record UploadResult(string BlobName, string? VersionId, string ETag, long Size);

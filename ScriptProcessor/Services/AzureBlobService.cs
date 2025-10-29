@@ -189,5 +189,106 @@ namespace ScriptProcessor.Services
             // Return the full URL to the blob
             return blobClient.Uri.ToString();
         }
+
+        public async Task<UploadResult> SaveBlobAsync(string blobName, string textContent, CancellationToken ct = default)
+        {
+            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+            await containerClient.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: ct);
+
+            var blobClient = containerClient.GetBlobClient(blobName);
+
+            // Convert string content to stream
+            using var contentStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(textContent));
+
+            // Get existing metadata if blob exists
+            var metadata = new Dictionary<string, string>();
+            try
+            {
+                var existingProperties = await blobClient.GetPropertiesAsync(cancellationToken: ct);
+                metadata = existingProperties.Value.Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                metadata["lastUpdated"] = DateTimeOffset.UtcNow.ToString("O");
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+            {
+                // Blob doesn't exist, create new metadata
+                metadata["createdAt"] = DateTimeOffset.UtcNow.ToString("O");
+                metadata["contentType"] = "text/plain";
+            }
+
+            var options = new BlobUploadOptions
+            {
+                HttpHeaders = new BlobHttpHeaders { ContentType = "text/plain" },
+                Metadata = metadata
+            };
+
+            // Delete existing blob if it exists to ensure we can overwrite
+            await blobClient.DeleteIfExistsAsync(cancellationToken: ct);
+
+            var uploadResponse = await blobClient.UploadAsync(contentStream, options, cancellationToken: ct);
+
+            _logger.LogInformation("Successfully saved blob {BlobName} with {Size} bytes",
+                blobName, textContent.Length);
+
+            return new UploadResult(blobName, uploadResponse.Value.VersionId, uploadResponse.Value.ETag.ToString(), textContent.Length);
+        }
+
+        public async Task<UploadResult> CreateRelatedFileAsync(string originalBlobName, string newSuffix, string textContent, CancellationToken ct = default)
+        {
+            // Parse the original blob name to create the new name
+            var pathParts = originalBlobName.Split('/');
+            var fileName = pathParts.Last();
+            var directory = string.Join("/", pathParts.Take(pathParts.Length - 1));
+
+            // Remove extension and add suffix
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+            var newFileName = $"{fileNameWithoutExtension}-{newSuffix}.txt";
+            var newBlobName = directory.Length > 0 ? $"{directory}/{newFileName}" : newFileName;
+
+            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+            await containerClient.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: ct);
+
+            var blobClient = containerClient.GetBlobClient(newBlobName);
+
+            // Convert string content to stream
+            using var contentStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(textContent));
+
+            // Get metadata from original blob if it exists
+            var metadata = new Dictionary<string, string>();
+            try
+            {
+                var originalBlobClient = containerClient.GetBlobClient(originalBlobName);
+                var originalProperties = await originalBlobClient.GetPropertiesAsync(cancellationToken: ct);
+
+                // Copy relevant metadata from original
+                metadata = originalProperties.Value.Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                metadata["derivedFrom"] = originalBlobName;
+                metadata["suffix"] = newSuffix;
+                metadata["createdAt"] = DateTimeOffset.UtcNow.ToString("O");
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+            {
+                // Original blob not found, create basic metadata
+                metadata["contentType"] = "text/plain";
+                metadata["suffix"] = newSuffix;
+                metadata["createdAt"] = DateTimeOffset.UtcNow.ToString("O");
+                _logger.LogWarning("Original blob {OriginalBlobName} not found, creating related file without original metadata", originalBlobName);
+            }
+
+            var options = new BlobUploadOptions
+            {
+                HttpHeaders = new BlobHttpHeaders { ContentType = "text/plain" },
+                Metadata = metadata
+            };
+
+            // Delete existing blob if it exists to ensure we can overwrite
+            await blobClient.DeleteIfExistsAsync(cancellationToken: ct);
+
+            var uploadResponse = await blobClient.UploadAsync(contentStream, options, cancellationToken: ct);
+
+            _logger.LogInformation("Successfully created related file {NewBlobName} from {OriginalBlobName} with suffix {Suffix}",
+                newBlobName, originalBlobName, newSuffix);
+
+            return new UploadResult(newBlobName, uploadResponse.Value.VersionId, uploadResponse.Value.ETag.ToString(), textContent.Length);
+        }
     }
 }

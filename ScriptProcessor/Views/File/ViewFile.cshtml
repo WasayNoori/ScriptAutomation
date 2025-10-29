@@ -29,6 +29,28 @@
     </div>
 }
 
+<!-- Translation Progress Modal -->
+<div class="modal fade" id="translationProgressModal" tabindex="-1" aria-labelledby="translationProgressLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="mb-4">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <h5 class="mb-3" id="progressStatus">
+                    <i class="bi bi-arrow-repeat me-2"></i>Translating...
+                </h5>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-clock me-1"></i>
+                    <span id="translationTimer">0.0s</span>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <!-- File Metadata Panel -->
     <div class="col-md-4">
@@ -151,7 +173,16 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="getGlossary()">
                         <i class="bi bi-book"></i> Get Glossary
                     </button>
-                    
+
+
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="getSummary()">
+                        <i class="bi bi-file-text"></i> Get Summary
+                    </button>
+
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="processTranslationChain()">
+                        <i class="bi bi-arrow-repeat"></i> Translation Chain
+                    </button>
+
                 </div>
             </div>
 
@@ -371,6 +402,80 @@
             modal.show();
         }
 
+        function getSummary() {
+            const blobName = '@Model.BlobName';
+
+            if (!blobName) {
+                alert('No file information available.');
+                return;
+            }
+
+            // Update button to show loading state
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+            btn.disabled = true;
+
+            // Send the request to the controller
+            fetch('@Url.Action("GetSummary", "File")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                },
+                body: JSON.stringify({
+                    blobName: blobName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateSummaryTab(data.summaryText, data.actionItems);
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to generate summary'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while processing the summary request.');
+            })
+            .finally(() => {
+                // Restore button state
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            });
+        }
+
+        function updateSummaryTab(summaryText, actionItems) {
+            const summaryContent = document.getElementById('summaryContent').querySelector('code');
+
+            // Combine both summary text and action items
+            let combinedContent = '';
+
+            if (summaryText) {
+                combinedContent += '=== SUMMARY ===\n\n' + summaryText;
+            }
+
+            if (actionItems) {
+                if (combinedContent) combinedContent += '\n\n';
+                combinedContent += '=== ACTION ITEMS ===\n\n' + actionItems;
+            }
+
+            if (!combinedContent) {
+                combinedContent = 'No summary content available';
+            }
+
+            summaryContent.textContent = combinedContent;
+
+            // Switch to Summary tab to show the result
+            const summaryTab = document.getElementById('summary-tab');
+            const tab = new bootstrap.Tab(summaryTab);
+            tab.show();
+
+            // Update content stats
+            updateContentStats();
+        }
+
         function countWords(text) {
             if (!text || text.trim() === '') return 0;
             return text.trim().split(/\s+/).length;
@@ -385,6 +490,118 @@
 
             document.getElementById('contentStats').textContent = `${lines} lines, ${chars} characters`;
             document.getElementById('wordCount').textContent = words;
+        }
+
+        function processTranslationChain() {
+            const blobName = '@Model.BlobName';
+
+            // Get the selected target language from the form
+            const targetLanguageSelect = document.getElementById('targetLanguage');
+            const targetLanguage = targetLanguageSelect.value;
+
+            if (!targetLanguage) {
+                alert('Please select a target language first.');
+                return;
+            }
+
+            // Update button to show loading state
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+            btn.disabled = true;
+
+            // Show progress modal
+            const progressModal = new bootstrap.Modal(document.getElementById('translationProgressModal'));
+            progressModal.show();
+
+            // Start timer
+            let startTime = Date.now();
+            let timerInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                document.getElementById('translationTimer').textContent = elapsed + 's';
+            }, 100);
+
+            // Send the request to the controller
+            fetch('@Url.Action("ProcessTranslationChain", "File")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                },
+                body: JSON.stringify({
+                    blobName: blobName,
+                    targetLanguage: targetLanguage
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Stop timer
+                clearInterval(timerInterval);
+
+                if (data.success) {
+                    // Show completion status
+                    document.getElementById('progressStatus').innerHTML =
+                        '<i class="bi bi-check-circle-fill text-success me-2"></i>Completed!';
+
+                    // Wait a moment to show completion, then close modal
+                    setTimeout(() => {
+                        progressModal.hide();
+                        // Update the translation tab with the translated content
+                        updateTranslationTab(data.translatedContent, data.targetLanguage);
+                    }, 1000);
+                } else {
+                    // Show error status
+                    document.getElementById('progressStatus').innerHTML =
+                        '<i class="bi bi-exclamation-circle-fill text-danger me-2"></i>Failed';
+
+                    setTimeout(() => {
+                        progressModal.hide();
+                        alert('Error: ' + (data.message || 'Translation chain failed'));
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                clearInterval(timerInterval);
+                console.error('Error:', error);
+
+                document.getElementById('progressStatus').innerHTML =
+                    '<i class="bi bi-exclamation-circle-fill text-danger me-2"></i>Error';
+
+                setTimeout(() => {
+                    progressModal.hide();
+                    alert('An error occurred while processing the translation chain.');
+                }, 1000);
+            })
+            .finally(() => {
+                // Restore button state
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+
+                // Reset modal for next use
+                setTimeout(() => {
+                    document.getElementById('progressStatus').innerHTML =
+                        '<i class="bi bi-arrow-repeat me-2"></i>Translating...';
+                    document.getElementById('translationTimer').textContent = '0.0s';
+                }, 1500);
+            });
+        }
+
+        function updateTranslationTab(translatedContent, targetLanguage) {
+            const translationContent = document.getElementById('translationContent').querySelector('code');
+
+            if (translatedContent) {
+                translationContent.textContent = translatedContent;
+            } else {
+                translationContent.textContent = 'No translation available';
+            }
+
+            // Switch to Translation tab to show the result
+            const translationTab = document.getElementById('translation-tab');
+            const tab = new bootstrap.Tab(translationTab);
+            tab.show();
+
+            // Update content stats
+            updateContentStats();
         }
 
         // Handle tab switching and update stats

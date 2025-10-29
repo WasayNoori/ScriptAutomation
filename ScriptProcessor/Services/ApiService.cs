@@ -139,5 +139,138 @@ namespace ScriptProcessor.Services
                 };
             }
         }
+
+        public async Task<SummaryResponse> SummarizeAsync(string blobPath, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var token = await GetJwtTokenAsync(cancellationToken);
+                var apiBaseUrl = _configuration["ApiSettings:BaseUrl"];
+
+                if (string.IsNullOrEmpty(apiBaseUrl))
+                {
+                    throw new InvalidOperationException("API Base URL not configured");
+                }
+
+                var summarizeEndpoint = $"{apiBaseUrl.TrimEnd('/')}/translation/summarizeScript";
+
+                var requestJson = JsonSerializer.Serialize(new
+                {
+                    blob_path = blobPath
+                }, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                var requestContent = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                var response = await _httpClient.PostAsync(summarizeEndpoint, requestContent, cancellationToken);
+
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Summary API returned error: {StatusCode} - {Content}",
+                        response.StatusCode, responseContent);
+
+                    return new SummaryResponse
+                    {
+                        Status = "error",
+                        Message = $"API Error: {response.StatusCode} - {responseContent}"
+                    };
+                }
+
+                var summaryResponse = JsonSerializer.Deserialize<SummaryResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                return summaryResponse ?? new SummaryResponse
+                {
+                    Status = "error",
+                    Message = "Failed to deserialize summary response"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to summarize content for blob path: {BlobPath}", blobPath);
+                return new SummaryResponse
+                {
+                    Status = "error",
+                    Message = ex.Message
+                };
+            }
+        }
+
+        public async Task<TranslateResponse> TranslateChainAsync(TranslateChainRequest request, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var token = await GetJwtTokenAsync(cancellationToken);
+                var apiBaseUrl = _configuration["ApiSettings:BaseUrl"];
+
+                if (string.IsNullOrEmpty(apiBaseUrl))
+                {
+                    throw new InvalidOperationException("API Base URL not configured");
+                }
+
+                var translateChainEndpoint = $"{apiBaseUrl.TrimEnd('/')}/translation/TranslateChain";
+
+                var requestJson = JsonSerializer.Serialize(new
+                {
+                    container_name = request.ContainerName,
+                    blob_path = request.BlobPath,
+                    input_language = request.InputLanguage,
+                    output_language = request.OutputLanguage,
+                    glossary = request.Glossary
+                });
+
+                var requestContent = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                var response = await _httpClient.PostAsync(translateChainEndpoint, requestContent, cancellationToken);
+
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("TranslateChain API returned error: {StatusCode} - {Content}",
+                        response.StatusCode, responseContent);
+
+                    return new TranslateResponse
+                    {
+                        Status = "error",
+                        Message = $"API Error: {response.StatusCode} - {responseContent}"
+                    };
+                }
+
+                var translationResponse = JsonSerializer.Deserialize<TranslateResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                return translationResponse ?? new TranslateResponse
+                {
+                    Status = "error",
+                    Message = "Failed to deserialize translation chain response"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to translate chain for blob path: {BlobPath}", request.BlobPath);
+                return new TranslateResponse
+                {
+                    Status = "error",
+                    Message = ex.Message
+                };
+            }
+        }
     }
 }

@@ -8,13 +8,15 @@ namespace ScriptProcessor.Controllers
         private readonly IFileService _fileService;
         private readonly IApiService _apiService;
         private readonly GlossaryDBService _glossaryService;
+        private readonly IFormatter _formatService;
         private readonly ILogger<FileController> _logger;
 
-        public FileController(IFileService fileService, IApiService apiService, GlossaryDBService glossaryService, ILogger<FileController> logger)
+        public FileController(IFileService fileService, IApiService apiService, GlossaryDBService glossaryService, IFormatter formatService, ILogger<FileController> logger)
         {
             _fileService = fileService;
             _apiService = apiService;
             _glossaryService = glossaryService;
+            _formatService = formatService;
             _logger = logger;
         }
 
@@ -214,11 +216,138 @@ namespace ScriptProcessor.Controllers
                 return Json(new { success = false, message = $"Error retrieving glossary terms: {ex.Message}" });
             }
         }
+
+        [HttpPost]
+        public async Task<IActionResult> GetSummary([FromBody] SummaryRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.BlobName))
+            {
+                return BadRequest(new { success = false, message = "Blob name is required." });
+            }
+
+            try
+            {
+                // Get the full blob URL to send to the API
+                var fullBlobUrl = await _fileService.GetBlobUrlAsync(request.BlobName);
+                var summaryResponse = await _apiService.SummarizeAsync(fullBlobUrl);
+
+                _logger.LogInformation("Summary request completed for blob {BlobName}", request.BlobName);
+
+                if (summaryResponse.Success)
+                {
+                    return Json(new {
+                        success = true,
+                        summaryText = summaryResponse.Summarize_Result?.Summarized_Text,
+                        actionItems = summaryResponse.Summarize_Result?.Action_Items
+                    });
+                }
+                else
+                {
+                    return Json(new { success = false, message = summaryResponse.Message ?? "Failed to generate summary" });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving summary for blob {BlobName}", request.BlobName);
+                return Json(new { success = false, message = $"Error retrieving summary: {ex.Message}" });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ProcessTranslationChain([FromBody] TranslationChainRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.BlobName))
+            {
+                return BadRequest(new { success = false, message = "Blob name is required." });
+            }
+
+            if (string.IsNullOrWhiteSpace(request?.TargetLanguage))
+            {
+                return BadRequest(new { success = false, message = "Target language is required." });
+            }
+
+            try
+            {
+                // Step 1: Get the file content
+                var fileDetails = await _fileService.GetFileDetailsAsync(request.BlobName);
+                var scriptText = fileDetails.TextContent;
+
+                _logger.LogInformation("Starting translation chain for blob {BlobName} to {Language}",
+                    request.BlobName, request.TargetLanguage);
+
+                // Step 2: Remove contractions using FormatService
+                var formattedText = _formatService.RemoveContractions(scriptText);
+                _logger.LogInformation("Contractions removed for blob {BlobName}", request.BlobName);
+
+                // Step 3: Get glossary terms using GlossaryService
+                var glossaryTerms = await _glossaryService.SelectedWords(formattedText, request.TargetLanguage.ToLower());
+                _logger.LogInformation("Found {Count} glossary terms for blob {BlobName}",
+                    glossaryTerms.Count, request.BlobName);
+
+                // Step 4: Get the full blob URL
+                var fullBlobUrl = await _fileService.GetBlobUrlAsync(request.BlobName);
+
+                // Map the target language to the API format (french -> fr, german -> de)
+                var outputLanguageCode = request.TargetLanguage.ToLower() switch
+                {
+                    "french" => "fr",
+                    "german" => "de",
+                    _ => request.TargetLanguage.ToLower()
+                };
+
+                // Step 5: Call the translation chain API
+                var translateChainRequest = new TranslateChainRequest
+                {
+                    BlobPath = fullBlobUrl,
+                    InputLanguage = "en",
+                    OutputLanguage = outputLanguageCode,
+                    Glossary = glossaryTerms
+                };
+
+                var translationResponse = await _apiService.TranslateChainAsync(translateChainRequest);
+
+                if (translationResponse.Success)
+                {
+                    _logger.LogInformation("Translation chain completed successfully for blob {BlobName}", request.BlobName);
+
+                    return Json(new {
+                        success = true,
+                        translatedContent = translationResponse.TranslatedContent,
+                        targetLanguage = request.TargetLanguage
+                    });
+                }
+                else
+                {
+                    return Json(new {
+                        success = false,
+                        message = translationResponse.Message ?? "Translation chain failed"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing translation chain for blob {BlobName}", request.BlobName);
+                return Json(new { success = false, message = $"Error processing translation chain: {ex.Message}" });
+            }
+        }
+
+
     }
 
     public class GlossaryRequest
     {
         public string ScriptText { get; set; } = string.Empty;
         public string TargetLanguage { get; set; } = "french";
+    }
+
+    public class SummaryRequest
+    {
+        public string BlobName { get; set; } = string.Empty;
+    }
+
+    public class TranslationChainRequest
+    {
+        public string BlobName { get; set; } = string.Empty;
+        public string TargetLanguage { get; set; } = string.Empty;
     }
 }
